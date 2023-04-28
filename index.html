@@ -7,6 +7,7 @@
     <title>MP3 BPM and Onset</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.16/dist/tailwind.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css" crossorigin="anonymous">
+    <script src="https://unpkg.com/wavesurfer.js"></script>
 </head>
 <body class="bg-gray-100 font-sans">
     <div class="container mx-auto px-4 py-10">
@@ -57,6 +58,7 @@
                     <div id="progress" class="h-full bg-green-500" style="width: 0%"></div>
                 </div>
             </div>
+            <div id="waveform" class="w-full h-32 mt-4"></div>
         </div>
     </div>
 
@@ -75,6 +77,7 @@
         let beatTimes = [];
         let beatData = [];
         let lastTapTime = null;
+        let wavesurfer;
 
         folderSelector.addEventListener('change', (e) => {
             files = Array.from(e.target.files);
@@ -133,8 +136,10 @@
         });
 
         audio.addEventListener('timeupdate', () => {
-            const progressPercentage = (audio.currentTime / audio.duration) * 100;
+            const progressFloat = (audio.currentTime / audio.duration);
+            const progressPercentage = progressFloat * 100;
             progressBar.style.width = progressPercentage + '%';
+            wavesurfer.seekTo(progressFloat);
         });
 
         audio.addEventListener('loadedmetadata', () => {
@@ -145,7 +150,10 @@
 
         function playCurrentFile() {
             if (currentIndex < files.length) {
-                audio.src = URL.createObjectURL(files[currentIndex]);
+                const fileUrl = URL.createObjectURL(files[currentIndex]);
+
+                audio.src = fileUrl;
+                wavesurfer.load(fileUrl);
                 audioPlay();
                 document.getElementById('currentMP3').textContent = files[currentIndex].name;
                 document.getElementById('trackNumber').textContent = currentIndex + 1;
@@ -167,6 +175,25 @@
             beatTimes = [];
             lastTapTime = null;
         }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            wavesurfer = WaveSurfer.create({
+                container: '#waveform',
+                waveColor: '#3b82f6',
+                progressColor: '#2563eb',
+                cursorColor: '#000',
+                barWidth: 2,
+                barHeight: 0.5,
+                responsive: true
+            });
+
+            // Add an event listener to update the progress bar when the audio is paused
+            wavesurfer.on('pause', () => {
+                const progressPercentage = (audio.currentTime / audio.duration) * 100;
+                progressBar.style.width = progressPercentage + '%';
+            });
+        });
+
 
     </script>
 </body>
