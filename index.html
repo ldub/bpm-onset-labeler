@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MP3 BPM and Onset</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.16/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css" crossorigin="anonymous">
+</head>
+<body class="bg-gray-100 font-sans">
+    <div class="container mx-auto px-4 py-10">
+        <h1 class="text-4xl font-semibold mb-5">BPM and Onset Labeler</h1>
+        <div class="flex items-center space-x-4 mb-5">
+            <label for="folderSelector" class="bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded cursor-pointer">
+                <i class="fas fa-folder-open mr-2"></i> Choose
+            </label>
+            <input type="file" id="folderSelector" webkitdirectory mozdirectory directory class="hidden" />
+            <div id="folderInfo" class="text-gray-700">No folder selected</div>
+        </div>        
+        
+        <div class="bg-white shadow rounded-lg p-5">
+            <div class="flex space-x-8 items-center text-gray-700 mb-4">
+                <div class="bg-white rounded shadow border p-4 w-32">
+                    <h5 class="text-xl font-bold mb-2 mt-0">Track</h5>
+                    <span id="trackNumber" class="text-sm">N/A</span>
+                </div>
+                <div class="bg-white rounded shadow border p-4 w-64">
+                    <h5 class="text-xl font-bold mb-2 mt-0">MP3</h5>
+                    <span id="currentMP3" class="text-sm">None</span>
+                </div>
+                <div class="bg-white rounded shadow border p-4 w-32">
+                    <h5 class="text-xl font-bold mb-2 mt-0">Length</h5>
+                    <span id="songLength" class="text-sm">N/A</span>
+                </div>
+                <div class="bg-white rounded shadow border p-4 w-32">
+                    <h5 class="text-xl font-bold mb-2 mt-0">BPM</h5>
+                    <span id="bpmIndicator" class="text-sm text-blue-600">N/A</span>
+                </div>
+                <div class="bg-white rounded shadow border p-4 w-32">
+                    <h5 class="text-xl font-bold mb-2 mt-0">Onset</h5>
+                    <span id="onsetIndicator" class="text-sm">N/A</span>
+                </div>
+            </div>
+            <div class="flex items-center space-x-4">
+                <button id="playButton" class="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded">
+                    <i class="fas fa-play"></i>
+                </button>
+                <button id="nextButton" class="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded">
+                    <i class="fas fa-step-forward"></i>
+                </button>
+                <button id="tapButton" class="bg-yellow-500 hover:bg-yellow-600 text-white py-2 px-4 rounded">Tap to Beat</button>
+                <button id="saveButton" class="bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded">
+                    <i class="fas fa-save"></i>
+                </button>                
+                <div class="flex-grow h-1 bg-gray-300 rounded-lg overflow-hidden">
+                    <div id="progress" class="h-full bg-green-500" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const folderSelector = document.getElementById('folderSelector');
+        const playButton = document.getElementById('playButton');
+        const nextButton = document.getElementById('nextButton');
+        const tapButton = document.getElementById('tapButton');
+        const saveButton = document.getElementById('saveButton');
+        const currentMP3 = document.getElementById('currentMP3');
+        const progressBar = document.getElementById('progress');
+
+        let audio = new Audio();
+        let files = [];
+        let currentIndex = 0;
+        let beatTimes = [];
+        let beatData = [];
+        let lastTapTime = null;
+
+        folderSelector.addEventListener('change', (e) => {
+            files = Array.from(e.target.files);
+            const folderName = files[0]?.webkitRelativePath.split('/')[0] || 'Unknown';
+            document.getElementById('folderInfo').textContent = `Folder: ${folderName} (${files.length} files)`;
+            playCurrentFile();
+        });
+
+
+        playButton.addEventListener('click', () => {
+            if (audio.paused) {
+                audioPlay();
+            } else {
+                audioPause();
+            }
+        });
+
+        nextButton.addEventListener('click', () => {
+            currentIndex++;
+            playCurrentFile();
+        });
+
+        tapButton.addEventListener('click', () => {
+            const currentTime = new Date().getTime();
+
+            if (lastTapTime !== null) {
+                beatTimes.push(currentTime - lastTapTime);
+            }
+
+            lastTapTime = currentTime;
+
+            if (beatTimes.length >= 2) {
+                const avgBpm = beatTimes.reduce((sum, time) => sum + time) / beatTimes.length;
+                const bpm = 60000 / avgBpm;
+
+                const lastOnset = beatTimes[beatTimes.length - 1];
+                beatData[currentIndex] = {
+                    filename: files[currentIndex].name,
+                    bpm: Math.round(bpm),
+                    onset: Math.round(lastOnset)
+                };
+                
+                // Update the BPM indicator
+                document.getElementById('bpmIndicator').textContent = `${Math.round(bpm)}`;
+                document.getElementById('onsetIndicator').textContent = `${Math.round(lastOnset)} ms`;
+            }
+        });
+
+        saveButton.addEventListener('click', () => {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(beatData));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", "beatData.json");
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        });
+
+        audio.addEventListener('timeupdate', () => {
+            const progressPercentage = (audio.currentTime / audio.duration) * 100;
+            progressBar.style.width = progressPercentage + '%';
+        });
+
+        audio.addEventListener('loadedmetadata', () => {
+            const minutes = Math.floor(audio.duration / 60);
+            const seconds = Math.floor(audio.duration % 60).toString().padStart(2, '0');
+            document.getElementById('songLength').textContent = `${minutes}:${seconds}`;
+        });
+
+        function playCurrentFile() {
+            if (currentIndex < files.length) {
+                audio.src = URL.createObjectURL(files[currentIndex]);
+                audioPlay();
+                document.getElementById('currentMP3').textContent = files[currentIndex].name;
+                document.getElementById('trackNumber').textContent = currentIndex + 1;
+                resetTapData();
+            }
+        }
+
+        function audioPlay() {
+            audio.play();
+            playButton.innerHTML = '<i class="fas fa-pause"></i>';
+        }
+
+        function audioPause() {
+            audio.pause();
+            playButton.innerHTML = '<i class="fas fa-play"></i>';
+        }
+
+        function resetTapData() {
+            beatTimes = [];
+            lastTapTime = null;
+        }
+
+    </script>
+</body>
+</html>
+
+
